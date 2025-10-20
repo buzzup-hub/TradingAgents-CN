@@ -1,9 +1,10 @@
-version: '3.8'
-
 services:
   # Streamlit Web 应用服务
   web:
-    build: .
+    build:
+      context: .
+      network: host
+    network_mode: "host"
     image: tradingagents-cn:latest
     container_name: TradingAgents-web
     ports:
@@ -42,8 +43,6 @@ services:
     depends_on:
       - mongodb
       - redis
-    networks:
-      - tradingagents-network
     # 健康检查
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
@@ -139,8 +138,8 @@ services:
       - tradingagents-network
     depends_on:
       - mongodb
-    profiles:
-      - management  # 使用 --profile management 启动
+    # profiles:
+    #   - management  # 使用 --profile management 启动
 
 # 数据卷定义
 volumes:

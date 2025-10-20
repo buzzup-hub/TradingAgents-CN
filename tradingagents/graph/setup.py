@@ -178,12 +178,17 @@ class GraphSetup:
         workflow.add_node("Risk Judge", risk_manager_node)
 
         # Define edges
-        # Start with the first analyst
-        first_analyst = selected_analysts[0]
-        workflow.add_edge(START, f"{first_analyst.capitalize()} Analyst")
+        # 🚀 并发优化：所有分析师从START同时启动
+        logger.info(f"🚀 [并发优化] 启用并发执行模式，{len(selected_analysts)}个分析师将并行执行")
 
-        # Connect analysts in sequence
-        for i, analyst_type in enumerate(selected_analysts):
+        # 1. START节点并发连接到所有分析师
+        for analyst_type in selected_analysts:
+            analyst_name = f"{analyst_type.capitalize()} Analyst"
+            workflow.add_edge(START, analyst_name)
+            logger.debug(f"🔗 [并发优化] START -> {analyst_name}")
+
+        # 2. 为每个分析师配置工具调用和消息清理
+        for analyst_type in selected_analysts:
             current_analyst = f"{analyst_type.capitalize()} Analyst"
             current_tools = f"tools_{analyst_type}"
             current_clear = f"Msg Clear {analyst_type.capitalize()}"
@@ -195,13 +200,29 @@ class GraphSetup:
                 [current_tools, current_clear],
             )
             workflow.add_edge(current_tools, current_analyst)
+            logger.debug(f"🔧 [并发优化] {current_analyst} 工具链配置完成")
 
-            # Connect to next analyst or to Bull Researcher if this is the last analyst
-            if i < len(selected_analysts) - 1:
-                next_analyst = f"{selected_analysts[i+1].capitalize()} Analyst"
-                workflow.add_edge(current_clear, next_analyst)
-            else:
-                workflow.add_edge(current_clear, "Bull Researcher")
+        # 3. 创建同步节点，等待所有分析师完成
+        def sync_analysts(state):
+            """同步节点：等待所有分析师完成后继续"""
+            logger.info(f"✅ [并发优化] 所有分析师已完成，准备进入研究员辩论阶段")
+            logger.debug(f"📊 [并发优化] 已收集报告: market={len(state.get('market_report', ''))}, "
+                        f"sentiment={len(state.get('sentiment_report', ''))}, "
+                        f"news={len(state.get('news_report', ''))}, "
+                        f"fundamentals={len(state.get('fundamentals_report', ''))}")
+            return state
+
+        workflow.add_node("Sync_Analysts", sync_analysts)
+
+        # 4. 所有分析师的清理节点连接到同步点
+        for analyst_type in selected_analysts:
+            current_clear = f"Msg Clear {analyst_type.capitalize()}"
+            workflow.add_edge(current_clear, "Sync_Analysts")
+            logger.debug(f"🔗 [并发优化] {current_clear} -> Sync_Analysts")
+
+        # 5. 同步点连接到Bull Researcher
+        workflow.add_edge("Sync_Analysts", "Bull Researcher")
+        logger.info(f"✅ [并发优化] 分析师并发配置完成")
 
         # Add remaining edges
         workflow.add_conditional_edges(

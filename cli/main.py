@@ -1062,6 +1062,7 @@ def run_analysis():
         config["llm_provider"] = "custom_openai"
         # 从环境变量获取自定义URL
         custom_url = os.getenv('CUSTOM_OPENAI_BASE_URL', selections["backend_url"])
+        logger.info(f"自定义OpenAI端点: {custom_url}")
         config["custom_openai_base_url"] = custom_url
         config["backend_url"] = custom_url
     elif "anthropic" in selected_llm_provider_name:

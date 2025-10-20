@@ -62,29 +62,41 @@ class UserActivityLogger:
         """获取活动记录文件路径"""
         if date is None:
             date = datetime.now().strftime("%Y-%m-%d")
+        logger.info(f"📁 活动记录文件路径: {self.activity_dir / f'user_activities_{date}.jsonl'}")
         return self.activity_dir / f"user_activities_{date}.jsonl"
+
+        
+
+
     
     def _get_session_id(self) -> str:
         """获取会话ID"""
         if 'session_id' not in st.session_state:
             st.session_state.session_id = f"session_{int(time.time())}_{id(st.session_state)}"
+        logger.info(f"📁 会话id: {st.session_state.session_id}")
         return st.session_state.session_id
+
+        
+
     
     def _get_user_info(self) -> Dict[str, str]:
         """获取当前用户信息"""
         user_info = st.session_state.get('user_info')
         if user_info is None:
             user_info = {}
+        logger.info(f"📁 用户信息: {user_info}")
         return {
             "username": user_info.get('username', 'anonymous'),
             "role": user_info.get('role', 'guest')
         }
+        
     
     def _get_request_info(self) -> Dict[str, Optional[str]]:
         """获取请求信息"""
         try:
             # 尝试获取请求信息（在Streamlit中可能有限）
             headers = st.context.headers if hasattr(st.context, 'headers') else {}
+            logger.info(f"📁 请求信息: {headers}")
             return {
                 "ip_address": headers.get('x-forwarded-for', headers.get('remote-addr')),
                 "user_agent": headers.get('user-agent'),
@@ -96,6 +108,7 @@ class UserActivityLogger:
                 "user_agent": None, 
                 "page_url": None
             }
+        
     
     def log_activity(self, 
                     action_type: str,
@@ -153,6 +166,7 @@ class UserActivityLogger:
                 # 追加写入JSONL格式
                 with open(activity_file, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(activity_dict, ensure_ascii=False) + '\n')
+                logger.info(f"📁 写入活动记录: {activity_dict}")
                 
             except Exception as e:
                 logger.error(f"❌ 写入活动记录失败: {e}")
@@ -166,6 +180,7 @@ class UserActivityLogger:
             success=success,
             error_message=error_message
         )
+        logger.info(f"📁 记录登录活动: {username}")
     
     def log_logout(self, username: str) -> None:
         """记录登出活动"""
@@ -174,6 +189,7 @@ class UserActivityLogger:
             action_name="user_logout",
             details={"username": username}
         )
+        logger.info(f"📁 记录登出活动: {username}")
     
     def log_analysis_request(self, stock_code: str, analysis_type: str, success: bool = True, 
                            duration_ms: int = None, error_message: str = None) -> None:
@@ -189,6 +205,7 @@ class UserActivityLogger:
             duration_ms=duration_ms,
             error_message=error_message
         )
+        logger.info(f"📁 记录股票分析请求: {stock_code}, {analysis_type}")
     
     def log_page_visit(self, page_name: str, page_params: Dict[str, Any] = None) -> None:
         """记录页面访问"""
@@ -200,6 +217,7 @@ class UserActivityLogger:
                 "page_params": page_params or {}
             }
         )
+        logger.info(f"📁 记录页面访问: {page_name}, {page_params}")
     
     def log_config_change(self, config_type: str, changes: Dict[str, Any]) -> None:
         """记录配置更改"""
@@ -211,6 +229,7 @@ class UserActivityLogger:
                 "changes": changes
             }
         )
+        logger.info(f"📁 记录配置更改: {config_type}, {changes}")
     
     def log_data_export(self, export_type: str, data_info: Dict[str, Any], 
                        success: bool = True, error_message: str = None) -> None:
@@ -225,7 +244,8 @@ class UserActivityLogger:
             success=success,
             error_message=error_message
         )
-    
+        logger.info(f"📁 记录数据导出: {export_type}, {data_info}")
+
     def log_user_management(self, operation: str, target_user: str, 
                           success: bool = True, error_message: str = None) -> None:
         """记录用户管理操作"""
@@ -236,7 +256,8 @@ class UserActivityLogger:
             success=success,
             error_message=error_message
         )
-    
+        logger.info(f"📁 记录用户管理操作: {operation}, {target_user}")
+        
     def get_user_activities(self, username: str = None, 
                           start_date: datetime = None,
                           end_date: datetime = None,
@@ -276,12 +297,12 @@ class UserActivityLogger:
                     activities.extend(self._read_activities_from_file(
                         activity_file, username, action_type, start_date, end_date
                     ))
-                
+                logger.info(f"📁 读取活动文件: {activity_file}")
                 current_date += timedelta(days=1)
             
             # 按时间戳倒序排序
             activities.sort(key=lambda x: x['timestamp'], reverse=True)
-            
+            logger.info(f"📁 按时间戳倒序排序: {activities}")
             # 应用限制
             return activities[:limit]
             
@@ -294,7 +315,7 @@ class UserActivityLogger:
                                  end_date: datetime = None) -> List[Dict[str, Any]]:
         """从文件读取活动记录"""
         activities = []
-        
+        logger.info(f"📁 从文件读取活动记录: {file_path}")
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 for line in f:
@@ -304,14 +325,16 @@ class UserActivityLogger:
                         # 应用过滤条件
                         if username and activity.get('username') != username:
                             continue
-                        
+                        logger.info(f"📁 应用过滤条件: {username} and activity.get('username') != username")
                         if action_type and activity.get('action_type') != action_type:
                             continue
-                        
+                        logger.info(f"📁 应用过滤条件: {action_type} and activity.get('action_type') != action_type")
                         activity_time = datetime.fromtimestamp(activity['timestamp'])
                         if start_date and activity_time < start_date:
                             continue
+                        logger.info(f"📁 应用过滤条件: {end_date} and activity.get('timestamp') > end_date")
                         if end_date and activity_time > end_date:
+                            logger.info(f"📁 应用过滤条件: {end_date} and activity.get('timestamp') > end_date")
                             continue
                         
                         activities.append(activity)
@@ -333,13 +356,13 @@ class UserActivityLogger:
         """
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
-        
+        logger.info(f"📁 获取活动统计信息: {start_date}, {end_date}")
         activities = self.get_user_activities(
             start_date=start_date,
             end_date=end_date,
             limit=10000  # 获取更多记录用于统计
         )
-        
+        logger.info(f"📁 获取活动统计信息: {activities}")
         # 统计分析
         stats = {
             "total_activities": len(activities),
@@ -350,30 +373,30 @@ class UserActivityLogger:
             "success_rate": 0,
             "average_duration": 0
         }
-        
+        logger.info(f"📁 获取活动统计信息: {stats}")
         # 按类型统计
         for activity in activities:
             action_type = activity.get('action_type', 'unknown')
-            stats["activity_types"][action_type] = stats["activity_types"].get(action_type, 0) + 1
-            
+            stats["activity_types"][action_type] = stats['activity_types'].get(action_type, 0) + 1
+            logger.info(f"📁 获取类型统计信息: {stats['activity_types']}")
             # 按用户统计
             username = activity.get('username', 'unknown')
-            stats["user_activities"][username] = stats["user_activities"].get(username, 0) + 1
-            
+            stats["user_activities"][username] = stats['user_activities'].get(username, 0) + 1
+            logger.info(f"📁 获取用户统计信息: {stats['user_activities']}")
             # 按日期统计
             date_str = datetime.fromtimestamp(activity['timestamp']).strftime('%Y-%m-%d')
             stats["daily_activities"][date_str] = stats["daily_activities"].get(date_str, 0) + 1
-        
+            logger.info(f"📁 获取日期统计信息: {stats['daily_activities']}")
         # 成功率统计
         successful_activities = sum(1 for a in activities if a.get('success', True))
         if activities:
             stats["success_rate"] = successful_activities / len(activities) * 100
-        
+            logger.info(f"📁 获取成功率: {stats['success_rate']}")
         # 平均耗时统计
         durations = [a.get('duration_ms', 0) for a in activities if a.get('duration_ms')]
         if durations:
             stats["average_duration"] = sum(durations) / len(durations)
-        
+            logger.info(f"📁 获取平均耗时: {stats['average_duration']}")
         return stats
     
     def cleanup_old_activities(self, days_to_keep: int = 90) -> int:
@@ -388,7 +411,7 @@ class UserActivityLogger:
         """
         cutoff_date = datetime.now() - timedelta(days=days_to_keep)
         deleted_count = 0
-        
+        logger.info(f"📁 清理旧活动记录: {cutoff_date}")
         try:
             for activity_file in self.activity_dir.glob("user_activities_*.jsonl"):
                 # 从文件名提取日期

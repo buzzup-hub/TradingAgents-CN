@@ -925,9 +925,14 @@ def main():
     # 在功能选择和AI模型配置之间添加分隔线
     st.sidebar.markdown("---")
 
+    # 提前渲染模型选择等配置，确保管理员页面也可见
+    config = render_sidebar()
+
+    handled_page = False
+
     # 根据选择的页面渲染不同内容
     if page == "⚙️ 配置管理":
-        # 检查配置权限
+        handled_page = True
         if not require_permission("config"):
             return
         try:
@@ -936,9 +941,8 @@ def main():
         except ImportError as e:
             st.error(f"配置管理模块加载失败: {e}")
             st.info("请确保已安装所有依赖包")
-        return
     elif page == "💾 缓存管理":
-        # 检查管理员权限
+        handled_page = True
         if not require_permission("admin"):
             return
         try:
@@ -946,9 +950,8 @@ def main():
             cache_main()
         except ImportError as e:
             st.error(f"缓存管理页面加载失败: {e}")
-        return
     elif page == "💰 Token统计":
-        # 检查配置权限
+        handled_page = True
         if not require_permission("config"):
             return
         try:
@@ -957,9 +960,8 @@ def main():
         except ImportError as e:
             st.error(f"Token统计页面加载失败: {e}")
             st.info("请确保已安装所有依赖包")
-        return
     elif page == "📋 操作日志":
-        # 检查管理员权限
+        handled_page = True
         if not require_permission("admin"):
             return
         try:
@@ -968,9 +970,8 @@ def main():
         except ImportError as e:
             st.error(f"操作日志模块加载失败: {e}")
             st.info("请确保已安装所有依赖包")
-        return
     elif page == "📈 分析结果":
-        # 检查分析权限
+        handled_page = True
         if not require_permission("analysis"):
             return
         try:
@@ -979,13 +980,15 @@ def main():
         except ImportError as e:
             st.error(f"分析结果模块加载失败: {e}")
             st.info("请确保已安装所有依赖包")
-        return
     elif page == "🔧 系统状态":
-        # 检查管理员权限
+        handled_page = True
         if not require_permission("admin"):
             return
         st.header("🔧 系统状态")
         st.info("系统状态功能开发中...")
+
+    if handled_page:
+        render_sidebar_logout()
         return
 
     # 默认显示股票分析页面
@@ -1033,9 +1036,6 @@ def main():
                 st.error(f"❌ {key}: 未配置")
         
         return
-    
-    # 渲染侧边栏
-    config = render_sidebar()
     
     # 添加使用指南显示切换
     # 如果正在分析或有分析结果，默认隐藏使用指南
@@ -1423,9 +1423,12 @@ def main():
         # 2. 或者用户点击了"查看报告"按钮
         show_results_button_clicked = st.session_state.get('show_analysis_results', False)
 
+        has_results = bool(analysis_results)
+        analysis_completed = has_results and not analysis_running
+
         should_show_results = (
-            (analysis_results and not analysis_running and current_analysis_id) or
-            (show_results_button_clicked and analysis_results)
+            analysis_completed or
+            (show_results_button_clicked and has_results)
         )
 
         # 调试日志
@@ -1434,6 +1437,7 @@ def main():
         logger.info(f"  - analysis_running: {analysis_running}")
         logger.info(f"  - current_analysis_id: {current_analysis_id}")
         logger.info(f"  - show_results_button_clicked: {show_results_button_clicked}")
+        logger.info(f"  - analysis_completed: {analysis_completed}")
         logger.info(f"  - should_show_results: {should_show_results}")
 
         if should_show_results:

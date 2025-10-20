@@ -26,6 +26,7 @@ class ChinaDataSource(Enum):
     TUSHARE = "tushare"
     AKSHARE = "akshare"
     BAOSTOCK = "baostock"
+    TRADINGVIEW = "tradingview"
 
 
 
@@ -53,10 +54,11 @@ class DataSourceManager:
         source_mapping = {
             'tushare': ChinaDataSource.TUSHARE,
             'akshare': ChinaDataSource.AKSHARE,
-            'baostock': ChinaDataSource.BAOSTOCK
+            'baostock': ChinaDataSource.BAOSTOCK,
+            'tradingview': ChinaDataSource.TRADINGVIEW
         }
 
-        return source_mapping.get(env_source, ChinaDataSource.AKSHARE)
+        return source_mapping.get(env_source, ChinaDataSource.TRADINGVIEW)
 
     # ==================== Tushare数据接口 ====================
 
@@ -189,7 +191,18 @@ class DataSourceManager:
     def _check_available_sources(self) -> List[ChinaDataSource]:
         """检查可用的数据源"""
         available = []
-        
+
+        # 检查TradingView (优先级最高)
+        try:
+            from .tradingview_adapter import get_tradingview_adapter
+            adapter = get_tradingview_adapter()
+            available.append(ChinaDataSource.TRADINGVIEW)
+            logger.info("✅ TradingView数据源可用 (高级伪装)")
+        except ImportError as e:
+            logger.warning(f"⚠️ TradingView数据源不可用: {e}")
+        except Exception as e:
+            logger.warning(f"⚠️ TradingView数据源配置失败: {e}")
+
         # 检查Tushare
         try:
             import tushare as ts
@@ -201,7 +214,7 @@ class DataSourceManager:
                 logger.warning("⚠️ Tushare数据源不可用: 未设置TUSHARE_TOKEN")
         except ImportError:
             logger.warning("⚠️ Tushare数据源不可用: 库未安装")
-        
+
         # 检查AKShare
         try:
             import akshare as ak
@@ -209,7 +222,7 @@ class DataSourceManager:
             logger.info("✅ AKShare数据源可用")
         except ImportError:
             logger.warning("⚠️ AKShare数据源不可用: 库未安装")
-        
+
         # 检查BaoStock
         try:
             import baostock as bs
@@ -217,7 +230,7 @@ class DataSourceManager:
             logger.info(f"✅ BaoStock数据源可用")
         except ImportError:
             logger.warning(f"⚠️ BaoStock数据源不可用: 库未安装")
-        
+
         return available
     
     def get_current_source(self) -> ChinaDataSource:
@@ -236,7 +249,9 @@ class DataSourceManager:
     
     def get_data_adapter(self):
         """获取当前数据源的适配器"""
-        if self.current_source == ChinaDataSource.TUSHARE:
+        if self.current_source == ChinaDataSource.TRADINGVIEW:
+            return self._get_tradingview_adapter()
+        elif self.current_source == ChinaDataSource.TUSHARE:
             return self._get_tushare_adapter()
         elif self.current_source == ChinaDataSource.AKSHARE:
             return self._get_akshare_adapter()
@@ -271,6 +286,15 @@ class DataSourceManager:
         except ImportError as e:
             logger.error(f"❌ BaoStock适配器导入失败: {e}")
             return None
+
+    def _get_tradingview_adapter(self):
+        """获取TradingView适配器"""
+        try:
+            from .tradingview_adapter import get_tradingview_adapter
+            return get_tradingview_adapter()
+        except ImportError as e:
+            logger.error(f"❌ TradingView适配器导入失败: {e}")
+            return None
     
     def get_stock_data(self, symbol: str, start_date: str = None, end_date: str = None) -> str:
         """
@@ -304,7 +328,10 @@ class DataSourceManager:
 
         try:
             # 根据数据源调用相应的获取方法
-            if self.current_source == ChinaDataSource.TUSHARE:
+            if self.current_source == ChinaDataSource.TRADINGVIEW:
+                logger.info(f"🔍 [股票代码追踪] 调用 TradingView 数据源，传入参数: symbol='{symbol}'")
+                result = self._get_tradingview_data(symbol, start_date, end_date)
+            elif self.current_source == ChinaDataSource.TUSHARE:
                 logger.info(f"🔍 [股票代码追踪] 调用 Tushare 数据源，传入参数: symbol='{symbol}'")
                 result = self._get_tushare_data(symbol, start_date, end_date)
             elif self.current_source == ChinaDataSource.AKSHARE:
@@ -521,7 +548,31 @@ class DataSourceManager:
             return result
         else:
             return f"❌ 未能获取{symbol}的股票数据"
-    
+
+    def _get_tradingview_data(self, symbol: str, start_date: str, end_date: str) -> str:
+        """使用TradingView获取数据"""
+        logger.debug(f"📊 [TradingView] 调用参数: symbol={symbol}, start_date={start_date}, end_date={end_date}")
+
+        start_time = time.time()
+        try:
+            from .tradingview_adapter import get_tradingview_adapter
+            adapter = get_tradingview_adapter()
+            result = adapter.get_stock_data(symbol, start_date, end_date)
+
+            duration = time.time() - start_time
+
+            if result and "❌" not in result:
+                logger.info(f"✅ TradingView数据获取成功: 耗时={duration:.2f}s, 结果长度={len(result)}")
+                return result
+            else:
+                logger.warning(f"⚠️ TradingView数据获取失败: 耗时={duration:.2f}s")
+                return result if result else f"❌ TradingView获取{symbol}数据失败"
+
+        except Exception as e:
+            duration = time.time() - start_time
+            logger.error(f"❌ TradingView调用失败: {e}, 耗时={duration:.2f}s", exc_info=True)
+            return f"❌ TradingView获取{symbol}数据失败: {e}"
+
     def _get_volume_safely(self, data) -> float:
         """安全地获取成交量数据，支持多种列名"""
         try:
@@ -545,8 +596,9 @@ class DataSourceManager:
         """尝试备用数据源 - 避免递归调用"""
         logger.error(f"🔄 {self.current_source.value}失败，尝试备用数据源...")
 
-        # 备用数据源优先级: AKShare > Tushare > BaoStock
+        # 备用数据源优先级: TradingView > AKShare > Tushare > BaoStock
         fallback_order = [
+            ChinaDataSource.TRADINGVIEW,
             ChinaDataSource.AKSHARE,
             ChinaDataSource.TUSHARE,
             ChinaDataSource.BAOSTOCK
@@ -558,7 +610,9 @@ class DataSourceManager:
                     logger.info(f"🔄 尝试备用数据源: {source.value}")
 
                     # 直接调用具体的数据源方法，避免递归
-                    if source == ChinaDataSource.TUSHARE:
+                    if source == ChinaDataSource.TRADINGVIEW:
+                        result = self._get_tradingview_data(symbol, start_date, end_date)
+                    elif source == ChinaDataSource.TUSHARE:
                         result = self._get_tushare_data(symbol, start_date, end_date)
                     elif source == ChinaDataSource.AKSHARE:
                         result = self._get_akshare_data(symbol, start_date, end_date)

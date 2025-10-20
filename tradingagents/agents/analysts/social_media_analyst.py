@@ -199,11 +199,104 @@ def create_social_media_analyst(llm, toolkit):
             )
         else:
             # 非Google模型的处理逻辑
-            logger.debug(f"📊 [DEBUG] 非Google模型 ({llm.__class__.__name__})，使用标准处理逻辑")
-            
-            report = ""
+            logger.debug(f"📊 [社交媒体分析师] 非Google模型 ({llm.__class__.__name__})，使用标准处理逻辑")
+
+            # 处理社交媒体情绪分析报告
             if len(result.tool_calls) == 0:
+                # 没有工具调用，直接使用LLM的回复
                 report = result.content
+                logger.info(f"💭 [社交媒体分析师] 直接回复，长度: {len(report)}")
+            else:
+                # 有工具调用，执行工具并生成完整分析报告
+                logger.info(f"💭 [社交媒体分析师] 工具调用: {[call.get('name', 'unknown') for call in result.tool_calls]}")
+
+                try:
+                    # 执行工具调用
+                    from langchain_core.messages import ToolMessage, HumanMessage
+
+                    tool_messages = []
+                    for tool_call in result.tool_calls:
+                        tool_name = tool_call.get('name')
+                        tool_args = tool_call.get('args', {})
+                        tool_id = tool_call.get('id')
+
+                        logger.debug(f"💭 [社交媒体分析师] 执行工具: {tool_name}, 参数: {tool_args}")
+
+                        # 找到对应的工具并执行
+                        tool_result = None
+                        for tool in tools:
+                            # 安全地获取工具名称进行比较
+                            current_tool_name = None
+                            if hasattr(tool, 'name'):
+                                current_tool_name = tool.name
+                            elif hasattr(tool, '__name__'):
+                                current_tool_name = tool.__name__
+
+                            if current_tool_name == tool_name:
+                                try:
+                                    tool_result = tool.invoke(tool_args)
+                                    logger.debug(f"💭 [社交媒体分析师] 工具执行成功，结果长度: {len(str(tool_result))}")
+                                    break
+                                except Exception as tool_error:
+                                    logger.error(f"❌ [社交媒体分析师] 工具执行失败: {tool_error}")
+                                    tool_result = f"工具执行失败: {str(tool_error)}"
+
+                        if tool_result is None:
+                            tool_result = f"未找到工具: {tool_name}"
+
+                        # 创建工具消息
+                        tool_message = ToolMessage(
+                            content=str(tool_result),
+                            tool_call_id=tool_id
+                        )
+                        tool_messages.append(tool_message)
+
+                    # 基于工具结果生成完整情绪分析报告
+                    analysis_prompt = f"""现在请基于上述社交媒体和情绪数据，生成详细的市场情绪分析报告。
+
+要求：
+1. 报告必须基于工具返回的真实数据进行分析
+2. 包含投资者情绪指标、社交媒体热度、舆论影响等分析
+3. 量化情绪强度（1-10分）
+4. 评估情绪对短期股价的影响
+5. 提供基于情绪的交易时机建议
+6. 报告长度不少于500字
+7. 使用中文撰写
+
+请分析股票{ticker} ({company_name})的社交媒体情绪，包括：
+- 投资者情绪分析
+- 社交媒体讨论热度
+- 关键意见领袖观点
+- 情绪对股价的影响预测
+- 基于情绪的投资建议"""
+
+                    # 构建完整的消息序列
+                    messages = state["messages"] + [result] + tool_messages + [HumanMessage(content=analysis_prompt)]
+
+                    # 生成最终分析报告
+                    final_result = llm.invoke(messages)
+                    report = final_result.content
+
+                    logger.info(f"💭 [社交媒体分析师] 生成完整情绪分析报告，长度: {len(report)}")
+
+                    # 返回包含工具调用和最终分析的完整消息序列
+                    return {
+                        "messages": [result] + tool_messages + [final_result],
+                        "sentiment_report": report,
+                    }
+
+                except Exception as e:
+                    logger.error(f"❌ [社交媒体分析师] 工具执行或分析生成失败: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+                    # 降级处理：返回工具调用信息
+                    report = f"社交媒体分析师调用了工具但分析生成失败: {[call.get('name', 'unknown') for call in result.tool_calls]}。请检查日志获取详细错误信息。"
+
+                    return {
+                        "messages": [result],
+                        "sentiment_report": report,
+                    }
 
         return {
             "messages": [result],

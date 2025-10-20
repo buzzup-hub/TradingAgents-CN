@@ -1,0 +1,300 @@
+# TradingView数据同步和备份配置文件
+
+# ==================== 数据同步配置 ====================
+sync_config:
+  # 基础同步配置
+  sync_interval: 300                    # 定期同步间隔(秒) - 5分钟
+  batch_size: 100                       # 批处理大小
+  max_concurrent_tasks: 5               # 最大并发任务数
+  
+  # 重试配置
+  max_retries: 3                        # 最大重试次数
+  retry_delay_base: 2                   # 重试延迟基数(指数退避)
+  timeout_seconds: 30                   # 单个任务超时时间
+  
+  # 性能优化
+  enable_compression: true              # 启用数据压缩
+  connection_pool_size: 10              # 连接池大小
+  keep_alive_timeout: 60               # 连接保活超时
+  
+  # 同步优先级配置
+  priority_symbols:                     # 高优先级品种
+    - "BINANCE:BTCUSDT"
+    - "BINANCE:ETHUSDT"
+    - "BINANCE:ADAUSDT"
+    - "FX:EURUSD"
+    - "NASDAQ:AAPL"
+  
+  priority_timeframes:                  # 高优先级时间框架
+    - "1"      # 1分钟
+    - "5"      # 5分钟
+    - "15"     # 15分钟
+    - "60"     # 1小时
+
+# ==================== 数据备份配置 ====================
+backup_config:
+  # 基础备份配置
+  backup_dir: "data/backups"            # 备份目录
+  max_backup_files: 30                  # 最大备份文件数
+  compression_enabled: true             # 启用压缩
+  compression_level: 6                  # 压缩级别 (1-9)
+  
+  # 备份存储配置
+  storage_backends:
+    local:
+      enabled: true
+      path: "data/backups/local"
+    
+    remote:
+      enabled: false                    # 远程备份(可选)
+      type: "s3"                       # s3/ftp/sftp
+      endpoint: ""
+      access_key: ""
+      secret_key: ""
+      bucket: "tradingview-backups"
+    
+    network:
+      enabled: false                    # 网络存储(可选)
+      type: "nfs"                      # nfs/smb
+      mount_point: "/mnt/backup"
+  
+  # 备份保留策略
+  retention_policy:
+    daily_backups: 7                    # 保留7天的日备份
+    weekly_backups: 4                   # 保留4周的周备份
+    monthly_backups: 12                 # 保留12个月的月备份
+    yearly_backups: 3                   # 保留3年的年备份
+  
+  # 备份验证配置
+  verification:
+    enable_checksum: true               # 启用校验和验证
+    checksum_algorithm: "sha256"        # 校验算法
+    enable_integrity_check: true       # 启用完整性检查
+    verify_after_backup: true          # 备份后立即验证
+
+# ==================== 定时任务配置 ====================
+schedule_config:
+  enabled: true                         # 启用定时任务
+  timezone: "Asia/Shanghai"             # 时区设置
+  
+  # 备份调度
+  backup_schedules:
+    # 全量备份 - 每天凌晨2点
+    full_backup:
+      enabled: true
+      cron: "0 2 * * *"                # Cron表达式
+      symbols: ["*"]                    # 所有品种
+      timeframes: ["*"]                 # 所有时间框架
+      retention_days: 7                 # 保留天数
+    
+    # 增量备份 - 每30分钟
+    incremental_backup:
+      enabled: true
+      cron: "*/30 * * * *"
+      symbols: ["priority"]             # 优先级品种
+      timeframes: ["1", "5", "15", "60"]
+      retention_days: 2
+    
+    # 快照备份 - 每天6、12、18点
+    snapshot_backup:
+      enabled: true
+      cron: "0 6,12,18 * * *"
+      symbols: ["BINANCE:BTCUSDT", "BINANCE:ETHUSDT"]
+      timeframes: ["15", "60"]
+      retention_days: 1
+  
+  # 同步调度
+  sync_schedules:
+    # 主数据源到缓存同步 - 每5分钟
+    primary_to_cache:
+      enabled: true
+      cron: "*/5 * * * *"
+      source: "primary"
+      target: "cache"
+      symbols: ["priority"]
+      timeframes: ["1", "5", "15"]
+    
+    # 缓存到备份同步 - 每小时
+    cache_to_backup:
+      enabled: true
+      cron: "0 * * * *"
+      source: "cache"
+      target: "backup"
+      symbols: ["*"]
+      timeframes: ["*"]
+    
+    # 质量检查同步 - 每15分钟
+    quality_check_sync:
+      enabled: true
+      cron: "*/15 * * * *"
+      source: "cache"
+      target: "quality_db"
+      min_quality_score: 0.8
+
+# ==================== 监控和告警配置 ====================
+monitoring_config:
+  # 基础监控
+  enabled: true
+  metrics_port: 9090                    # Prometheus指标端口
+  health_check_interval: 60             # 健康检查间隔(秒)
+  
+  # 性能监控
+  performance_metrics:
+    sync_speed_threshold: 100           # 同步速度阈值(records/sec)
+    backup_time_threshold: 300          # 备份时间阈值(秒)
+    cache_hit_rate_threshold: 0.8       # 缓存命中率阈值
+    disk_usage_threshold: 0.85          # 磁盘使用率阈值
+  
+  # 告警配置
+  alerts:
+    enabled: true
+    channels:
+      log:
+        enabled: true
+        level: "WARNING"                # 日志级别
+      
+      email:
+        enabled: false                  # 邮件告警
+        smtp_server: "smtp.example.com"
+        smtp_port: 587
+        username: ""
+        password: ""
+        recipients: []
+      
+      webhook:
+        enabled: false                  # Webhook告警
+        url: "https://hooks.slack.com/..."
+        timeout: 10
+      
+      prometheus:
+        enabled: true                   # Prometheus指标
+        job_name: "tradingview_sync_backup"
+        instance: "localhost:9090"
+  
+  # 告警规则
+  alert_rules:
+    sync_failure:
+      condition: "sync_failure_rate > 0.1"
+      severity: "critical"
+      message: "数据同步失败率过高"
+    
+    backup_failure:
+      condition: "backup_failure_count > 0"
+      severity: "error"
+      message: "备份任务失败"
+    
+    disk_full:
+      condition: "disk_usage > 0.9"
+      severity: "warning"
+      message: "磁盘空间不足"
+    
+    quality_degradation:
+      condition: "avg_quality_score < 0.8"
+      severity: "warning"
+      message: "数据质量下降"
+
+# ==================== 数据质量配置 ====================
+quality_config:
+  # 质量评估阈值
+  thresholds:
+    min_completeness: 0.95              # 最小完整性
+    min_accuracy: 0.90                  # 最小准确性
+    min_consistency: 0.85               # 最小一致性
+    min_timeliness: 0.90                # 最小及时性
+    min_validity: 0.95                  # 最小有效性
+    min_uniqueness: 0.99                # 最小唯一性
+  
+  # 质量权重
+  weights:
+    completeness: 0.25
+    accuracy: 0.25
+    consistency: 0.20
+    timeliness: 0.15
+    validity: 0.10
+    uniqueness: 0.05
+  
+  # 数据清洗配置
+  cleaning:
+    enabled: true
+    auto_fix_price_logic: true          # 自动修复价格逻辑错误
+    remove_duplicate_timestamps: true   # 移除重复时间戳
+    interpolate_missing_values: false   # 插值缺失值
+    outlier_detection: true             # 异常值检测
+    outlier_threshold: 3.0              # 异常值阈值(标准差倍数)
+
+# ==================== 安全配置 ====================
+security_config:
+  # 访问控制
+  authentication:
+    enabled: false                      # 启用认证
+    method: "basic"                     # basic/jwt/oauth
+    username: "admin"
+    password: "changeme"
+  
+  # 数据加密
+  encryption:
+    enabled: false                      # 启用加密
+    algorithm: "AES-256-GCM"           # 加密算法
+    key_rotation_days: 90              # 密钥轮换天数
+  
+  # 审计日志
+  audit:
+    enabled: true                       # 启用审计
+    log_file: "logs/audit.log"         # 审计日志文件
+    retention_days: 90                 # 审计日志保留天数
+    
+    # 审计事件
+    events:
+      - "backup_create"
+      - "backup_restore"
+      - "sync_start"
+      - "sync_complete"
+      - "config_change"
+      - "system_start"
+      - "system_stop"
+
+# ==================== 高级配置 ====================
+advanced_config:
+  # 数据分片配置
+  sharding:
+    enabled: false                      # 启用分片
+    shard_size_mb: 100                 # 分片大小(MB)
+    shard_key: "symbol_timeframe"      # 分片键
+  
+  # 数据压缩配置
+  compression:
+    algorithm: "lz4"                   # 压缩算法 lz4/gzip/zstd
+    level: 3                           # 压缩级别
+    threshold_kb: 10                   # 压缩阈值(KB)
+  
+  # 缓存优化
+  cache_optimization:
+    enable_prefetch: true              # 启用预取
+    prefetch_window_hours: 24          # 预取时间窗口
+    enable_adaptive_ttl: true          # 启用自适应TTL
+    min_ttl_minutes: 30                # 最小TTL
+    max_ttl_hours: 24                  # 最大TTL
+  
+  # 并发控制
+  concurrency:
+    max_sync_workers: 10               # 最大同步工作线程
+    max_backup_workers: 3              # 最大备份工作线程
+    rate_limit_per_second: 100         # 每秒请求限制
+    connection_timeout: 30             # 连接超时
+
+# ==================== 开发调试配置 ====================
+debug_config:
+  # 调试模式
+  debug_mode: false                     # 调试模式
+  verbose_logging: false               # 详细日志
+  profile_performance: false           # 性能分析
+  
+  # 测试配置
+  test_mode: false                     # 测试模式
+  mock_data: false                     # 使用模拟数据
+  dry_run: false                       # 干运行模式
+  
+  # 开发工具
+  enable_debug_api: false              # 启用调试API
+  debug_api_port: 8080                 # 调试API端口
+  enable_metrics_dashboard: false      # 启用指标仪表板

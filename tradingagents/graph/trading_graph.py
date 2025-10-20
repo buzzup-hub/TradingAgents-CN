@@ -67,8 +67,28 @@ class TradingAgentsGraph:
 
         # Initialize LLMs
         if self.config["llm_provider"].lower() == "openai":
-            self.deep_thinking_llm = ChatOpenAI(model=self.config["deep_think_llm"], base_url=self.config["backend_url"])
-            self.quick_thinking_llm = ChatOpenAI(model=self.config["quick_think_llm"], base_url=self.config["backend_url"])
+            # 记录OpenAI配置信息
+            openai_api_key = os.getenv("OPENAI_API_KEY", "")
+            backend_url = self.config.get("backend_url", "https://api.openai.com/v1")
+
+            logger.info(f"🔧 [OpenAI配置] 初始化OpenAI LLM")
+            logger.info(f"   API Key: {openai_api_key[:20]}...{openai_api_key[-10:] if len(openai_api_key) > 30 else ''}")
+            logger.info(f"   Base URL: {backend_url}")
+            logger.info(f"   深度思考模型: {self.config['deep_think_llm']}")
+            logger.info(f"   快速思考模型: {self.config['quick_think_llm']}")
+
+            self.deep_thinking_llm = ChatOpenAI(
+                model=self.config["deep_think_llm"],
+                base_url=backend_url,
+                api_key=openai_api_key
+            )
+            self.quick_thinking_llm = ChatOpenAI(
+                model=self.config["quick_think_llm"],
+                base_url=backend_url,
+                api_key=openai_api_key
+            )
+
+            logger.info(f"✅ [OpenAI配置] LLM初始化完成")
         elif self.config["llm_provider"] == "siliconflow":
             # SiliconFlow支持：使用OpenAI兼容API
             siliconflow_api_key = os.getenv('SILICONFLOW_API_KEY')

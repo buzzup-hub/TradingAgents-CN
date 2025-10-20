@@ -1393,6 +1393,7 @@ def get_current_china_data_source() -> str:
 def get_hk_stock_data_unified(symbol: str, start_date: str = None, end_date: str = None) -> str:
     """
     获取港股数据的统一接口
+    支持配置的数据源优先级 (TradingView > AKShare > Yahoo Finance)
 
     Args:
         symbol: 港股代码 (如: 0700.HK)
@@ -1405,10 +1406,28 @@ def get_hk_stock_data_unified(symbol: str, start_date: str = None, end_date: str
     try:
         logger.info(f"🇭🇰 获取港股数据: {symbol}")
 
-        # 优先使用AKShare港股数据（国内数据源，港股支持更好，更稳定）
+        # 优先使用数据源管理器（支持TradingView等配置的数据源）
+        try:
+            from .data_source_manager import get_data_source_manager, ChinaDataSource
+
+            manager = get_data_source_manager()
+
+            # 如果当前数据源是TradingView，优先使用
+            if manager.current_source == ChinaDataSource.TRADINGVIEW:
+                logger.info(f"🔄 使用TradingView获取港股数据: {symbol}")
+                result = manager.get_stock_data(symbol, start_date, end_date)
+                if result and "❌" not in result:
+                    logger.info(f"✅ TradingView港股数据获取成功: {symbol}")
+                    return result
+                else:
+                    logger.warning(f"⚠️ TradingView返回错误，降级到其他数据源")
+        except Exception as e:
+            logger.warning(f"⚠️ 数据源管理器调用失败: {e}")
+
+        # 备用方案1：使用AKShare港股数据（国内数据源，港股支持更好，更稳定）
         if AKSHARE_HK_AVAILABLE:
             try:
-                logger.info(f"🔄 优先使用AKShare获取港股数据: {symbol}")
+                logger.info(f"🔄 使用AKShare获取港股数据: {symbol}")
                 result = get_hk_stock_data_akshare(symbol, start_date, end_date)
                 if result and "❌" not in result:
                     logger.info(f"✅ AKShare港股数据获取成功: {symbol}")
@@ -1513,6 +1532,7 @@ def get_hk_stock_info_unified(symbol: str) -> Dict:
 def get_stock_data_by_market(symbol: str, start_date: str = None, end_date: str = None) -> str:
     """
     根据股票市场类型自动选择数据源获取数据
+    统一使用数据源管理器，优先TradingView
 
     Args:
         symbol: 股票代码
@@ -1528,15 +1548,33 @@ def get_stock_data_by_market(symbol: str, start_date: str = None, end_date: str 
         market_info = StockUtils.get_market_info(symbol)
 
         if market_info['is_china']:
-            # 中国A股
+            # 中国A股 - 使用数据源管理器
             return get_china_stock_data_unified(symbol, start_date, end_date)
         elif market_info['is_hk']:
-            # 港股
+            # 港股 - 使用数据源管理器
             return get_hk_stock_data_unified(symbol, start_date, end_date)
         else:
-            # 美股或其他
-            from .optimized_us_data import get_us_stock_data_cached
+            # 美股或其他 - 优先使用数据源管理器（支持TradingView）
+            try:
+                from .data_source_manager import get_data_source_manager, ChinaDataSource
 
+                manager = get_data_source_manager()
+
+                # 如果当前数据源是TradingView，优先使用
+                if manager.current_source == ChinaDataSource.TRADINGVIEW:
+                    logger.info(f"🇺🇸 使用TradingView获取美股数据: {symbol}")
+                    result = manager.get_stock_data(symbol, start_date, end_date)
+                    if result and "❌" not in result:
+                        logger.info(f"✅ TradingView美股数据获取成功: {symbol}")
+                        return result
+                    else:
+                        logger.warning(f"⚠️ TradingView返回错误，降级到FinnHub/Yahoo")
+            except Exception as e:
+                logger.warning(f"⚠️ 数据源管理器调用失败: {e}")
+
+            # 备用方案：使用FinnHub/Yahoo Finance
+            from .optimized_us_data import get_us_stock_data_cached
+            logger.info(f"🔄 使用FinnHub/Yahoo获取美股数据: {symbol}")
             return get_us_stock_data_cached(symbol, start_date, end_date)
 
     except Exception as e:

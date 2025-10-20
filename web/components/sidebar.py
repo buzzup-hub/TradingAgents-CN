@@ -418,6 +418,7 @@ def render_sidebar():
             save_model_selection(st.session_state.llm_provider, st.session_state.model_category, llm_model)
         elif llm_provider == "openai":
              openai_options = [
+                 "gpt-5",
                  "gpt-4o",
                  "gpt-4o-mini",
                  "gpt-4-turbo",
@@ -435,6 +436,7 @@ def render_sidebar():
                  options=openai_options,
                  index=current_index,
                  format_func=lambda x: {
+                     "gpt-5": "GPT-5 - 最新第五代模型",
                      "gpt-4o": "GPT-4o - 最新旗舰模型",
                      "gpt-4o-mini": "GPT-4o Mini - 轻量旗舰",
                      "gpt-4-turbo": "GPT-4 Turbo - 强化版",
@@ -512,8 +514,9 @@ def render_sidebar():
             
             # 模型选择
             custom_openai_options = [
+                "gpt-5",
                 "gpt-4o",
-                "gpt-4o-mini", 
+                "gpt-4o-mini",
                 "gpt-4-turbo",
                 "gpt-4",
                 "gpt-3.5-turbo",
@@ -539,6 +542,7 @@ def render_sidebar():
                 options=custom_openai_options,
                 index=current_index,
                 format_func=lambda x: {
+                    "gpt-5": "GPT-5 - OpenAI最新第五代",
                     "gpt-4o": "GPT-4o - OpenAI最新旗舰",
                     "gpt-4o-mini": "GPT-4o Mini - 轻量旗舰",
                     "gpt-4-turbo": "GPT-4 Turbo - 强化版",

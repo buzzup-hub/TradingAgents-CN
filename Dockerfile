@@ -1,8 +1,21 @@
 # 使用官方Python镜像替代GitHub Container Registry
 FROM python:3.10-slim-bookworm
 
-# 安装uv包管理器
-RUN pip install -i https://mirrors.aliyun.com/pypi/simple uv
+# 安装uv包管理器，按照多个镜像源依次尝试
+RUN set -e; \
+    for src in \
+        https://mirrors.aliyun.com/pypi/simple \
+        https://pypi.tuna.tsinghua.edu.cn/simple \
+        https://pypi.doubanio.com/simple \
+        https://pypi.org/simple; do \
+      echo "Try installing uv from $src"; \
+      if pip install --no-cache-dir -i "$src" uv; then \
+        echo "Installed uv from $src"; \
+        break; \
+      else \
+        echo "Failed at $src, trying next mirror..."; \
+      fi; \
+    done
 
 WORKDIR /app
 
@@ -11,12 +24,13 @@ RUN mkdir -p /app/data /app/logs
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-RUN echo 'deb http://mirrors.aliyun.com/debian/ bookworm main' > /etc/apt/sources.list && \
-    echo 'deb-src http://mirrors.aliyun.com/debian/ bookworm main' >> /etc/apt/sources.list && \
-    echo 'deb http://mirrors.aliyun.com/debian/ bookworm-updates main' >> /etc/apt/sources.list && \
-    echo 'deb-src http://mirrors.aliyun.com/debian/ bookworm-updates main' >> /etc/apt/sources.list && \
-    echo 'deb http://mirrors.aliyun.com/debian-security bookworm-security main' >> /etc/apt/sources.list && \
-    echo 'deb-src http://mirrors.aliyun.com/debian-security bookworm-security main' >> /etc/apt/sources.list
+# 配置APT镜像源
+RUN rm -f /etc/apt/sources.list.d/debian.sources && \
+    cat <<'EOF' > /etc/apt/sources.list
+deb https://mirrors.aliyun.com/debian/ bookworm main non-free non-free-firmware
+deb https://mirrors.aliyun.com/debian/ bookworm-updates main non-free non-free-firmware
+deb https://mirrors.aliyun.com/debian-security bookworm-security main non-free non-free-firmware
+EOF
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \

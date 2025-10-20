@@ -396,9 +396,19 @@ class AKShareProvider:
             # 记录最终结果
             if financial_data:
                 logger.info(f"✅ AKShare财务数据获取完成: {symbol}, 包含{len(financial_data)}个数据集")
-                for key, value in financial_data.items():
-                    if hasattr(value, '__len__'):
-                        logger.info(f"  - {key}: {len(value)}条记录")
+
+            # 📋 详细记录财务数据内容
+            logger.info(f"📋 [财务数据详情] 股票: {symbol}")
+            logger.info(f"📋 [财务数据详情] 数据集类型: {list(financial_data.keys())}")
+            for key, value in financial_data.items():
+                if hasattr(value, '__len__'):
+                    logger.info(f"📋 [财务数据详情] {key}: {len(value)}条记录")
+                    # 如果是DataFrame，显示列名
+                    if hasattr(value, 'columns'):
+                        logger.info(f"📋 [财务数据详情] {key} 列名: {list(value.columns)[:10]}")
+                    # 显示第一行数据示例
+                    if not value.empty and len(value) > 0:
+                        logger.info(f"📋 [财务数据详情] {key} 示例数据: {value.iloc[0].to_dict()}")
             else:
                 logger.warning(f"⚠️ 未能获取{symbol}的任何AKShare财务数据")
             
@@ -486,7 +496,16 @@ def format_hk_stock_data_akshare(symbol: str, data: pd.DataFrame, start_date: st
             provider = get_akshare_provider()
             stock_info = provider.get_hk_stock_info(symbol)
             stock_name = stock_info.get('name', f'港股{symbol}')
+
+            # 📋 详细记录获取的港股信息
             logger.info(f"✅ 港股信息获取成功: {stock_name}")
+            logger.info(f"📋 [港股信息详情] 代码: {symbol}, 名称: {stock_name}")
+            logger.info(f"📋 [港股信息详情] 完整信息: {stock_info}")
+            logger.info(f"📋 [港股信息详情] 货币: {stock_info.get('currency', 'N/A')}")
+            logger.info(f"📋 [港股信息详情] 交易所: {stock_info.get('exchange', 'N/A')}")
+            logger.info(f"📋 [港股信息详情] 数据源: {stock_info.get('source', 'N/A')}")
+            if 'latest_price' in stock_info:
+                logger.info(f"📋 [港股信息详情] 最新价格: HK${stock_info['latest_price']:.2f}")
         except Exception as info_error:
             logger.error(f"⚠️ 港股信息获取失败，使用默认信息: {info_error}")
             # 继续处理，使用默认信息
@@ -499,6 +518,32 @@ def format_hk_stock_data_akshare(symbol: str, data: pd.DataFrame, start_date: st
         avg_volume = data['Volume'].mean() if 'Volume' in data.columns else 0
         max_price = data['High'].max()
         min_price = data['Low'].min()
+
+        # 📋 详细记录港股数据统计信息
+        logger.info(f"📊 [港股数据统计] 股票: {symbol} ({stock_name})")
+        logger.info(f"📊 [港股数据统计] 数据期间: {start_date} 至 {end_date}")
+        logger.info(f"📊 [港股数据统计] 交易天数: {len(data)}天")
+        logger.info(f"📊 [港股数据统计] 最新价格: HK${latest_price:.2f}")
+        logger.info(f"📊 [港股数据统计] 期间涨跌: HK${price_change:+.2f} ({price_change_pct:+.2f}%)")
+        logger.info(f"📊 [港股数据统计] 期间最高: HK${max_price:.2f}")
+        logger.info(f"📊 [港股数据统计] 期间最低: HK${min_price:.2f}")
+        logger.info(f"📊 [港股数据统计] 平均成交量: {avg_volume:,.0f}股")
+
+        # 📋 记录数据列信息
+        logger.info(f"📊 [港股数据列名] 可用列: {list(data.columns)}")
+
+        # 📋 记录数据范围
+        if 'Date' in data.columns:
+            date_range_start = data['Date'].min().strftime('%Y-%m-%d')
+            date_range_end = data['Date'].max().strftime('%Y-%m-%d')
+            logger.info(f"📊 [港股数据日期范围] {date_range_start} 至 {date_range_end}")
+
+        # 📋 记录最近3天的具体数据
+        recent_data = data.tail(3)
+        logger.info(f"📊 [港股数据最近3天]:")
+        for _, row in recent_data.iterrows():
+            date_str = row['Date'].strftime('%Y-%m-%d') if 'Date' in row else str(row.name)
+            logger.info(f"  - {date_str}: 开盘HK${row['Open']:.2f} | 收盘HK${row['Close']:.2f} | 最高HK${row['High']:.2f} | 最低HK${row['Low']:.2f} | 成交量{row.get('Volume', 0):,.0f}")
 
         # 格式化输出
         formatted_text = f"""
